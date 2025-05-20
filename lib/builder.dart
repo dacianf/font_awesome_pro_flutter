@@ -113,7 +113,8 @@ class FontAwesomePro extends Builder {
       icons.addAll(visitor.access);
     }
     for (final style in styles) {
-      final formatter = DartFormatter();
+      final formatter =
+          DartFormatter(languageVersion: DartFormatter.latestLanguageVersion);
       final emitter = DartEmitter(useNullSafetySyntax: true);
       final library = printLibrary(
         style,
