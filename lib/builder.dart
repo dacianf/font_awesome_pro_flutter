@@ -114,7 +114,7 @@ class FontAwesomePro extends Builder {
     }
     for (final style in styles) {
       final formatter =
-          DartFormatter(languageVersion: DartFormatter.latestLanguageVersion);
+          DartFormatter(languageVersion: DartFormatter.latestShortStyleLanguageVersion);
       final emitter = DartEmitter(useNullSafetySyntax: true);
       final library = printLibrary(
         style,
