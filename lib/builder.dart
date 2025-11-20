@@ -10,7 +10,7 @@ import 'package:glob/glob.dart';
 import 'package:path/path.dart' as p;
 import 'package:recase/recase.dart';
 
-const styles = {'solid', 'regular', 'light', 'thin', 'brands'};
+const styles = {'solid', 'regular', 'light', 'thin', 'brands', 'duotone', 'sharp-solid', 'sharp-regular'};
 
 Library printLibrary(String style, Iterable<_IconResult> icons) {
   return Library(
@@ -79,7 +79,7 @@ class _IconResult {
 
 class _Visitor extends RecursiveAstVisitor {
   static final RegExp prefixPattern =
-      RegExp(r"^FA(Solid|Regular|Light|Thin|Brands)$");
+      RegExp(r"^FA(Solid|Regular|Light|Thin|Brands|Duotone|SharpSolid|SharpRegular)$");
   static final RegExp iconPattern = RegExp(r"^fa(.+)$");
   final Set<_IconResult> access = {};
 
@@ -121,10 +121,14 @@ class FontAwesomePro extends Builder {
         icons.where((element) => element.style == style),
       );
       final contents = formatter.format("${library.accept(emitter)}");
+      final filePath = style.contains('-') 
+          ? p.join('lib', 'font_awesome', '${style.replaceAll('-', '_')}.dart')
+          : p.join('lib', 'font_awesome', '${style}.dart');
+      
       buildStep.writeAsString(
         AssetId(
           buildStep.inputId.package,
-          p.join('lib', 'font_awesome', '${style}.dart'),
+          filePath,
         ),
         contents,
       );
@@ -139,6 +143,9 @@ class FontAwesomePro extends Builder {
           r'lib/font_awesome/light.dart',
           r'lib/font_awesome/thin.dart',
           r'lib/font_awesome/brands.dart',
+          r'lib/font_awesome/duotone.dart',
+          r'lib/font_awesome/sharp_solid.dart',
+          r'lib/font_awesome/sharp_regular.dart',
         ],
       };
 }
