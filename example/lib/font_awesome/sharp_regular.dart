@@ -4,8 +4,8 @@
 
 import 'package:flutter/widgets.dart';
 
-class FAThin {
-  FAThin._();
+class FASharpRegular {
+  FASharpRegular._();
 
-  static const _fontFamily = 'FontAwesomeThin';
+  static const _fontFamily = 'FontAwesomeSharpRegular';
 }

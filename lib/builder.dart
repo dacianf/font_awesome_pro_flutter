@@ -1,151 +1,52 @@
 import 'dart:async';
 
-import 'package:analyzer/dart/ast/visitor.dart';
 import 'package:build/build.dart';
-import 'package:built_collection/built_collection.dart';
-import 'package:code_builder/code_builder.dart';
-import 'package:dart_style/dart_style.dart';
-import 'package:font_awesome_pro_flutter/icons.dart';
 import 'package:glob/glob.dart';
-import 'package:path/path.dart' as p;
-import 'package:recase/recase.dart';
 
-const styles = {'solid', 'regular', 'light', 'thin', 'brands', 'duotone', 'sharp-solid', 'sharp-regular'};
+import 'src/generator.dart';
+import 'src/style.dart';
 
-Library printLibrary(String style, Iterable<_IconResult> icons) {
-  return Library(
-    (b) => b
-      ..directives = ListBuilder(
-        [Directive.import("package:flutter/widgets.dart")],
-      )
-      ..body = ListBuilder(
-        [
-          Class(
-            (b) => b
-              ..name = ReCase("f_a_${style}").pascalCase
-              ..constructors = ListBuilder([Constructor((b) => b..name = "_")])
-              ..fields = ListBuilder([
-                ...icons.map((e) => e.toField()),
-                Field(
-                  (b) => b
-                    ..name = '_fontFamily'
-                    ..static = true
-                    ..modifier = FieldModifier.constant
-                    ..assignment = literalString(
-                      ReCase("font-awesome-${style}").pascalCase,
-                    ).code,
-                )
-              ]),
-          )
-        ],
-      ),
-  );
-}
+export 'src/generator.dart' show GenerationResult, generate;
+export 'src/style.dart' show FontAwesomeStyle;
 
-class _IconResult {
-  final String style;
-  final String name;
-
-  _IconResult({
-    required this.style,
-    required this.name,
-  });
-
-  @override
-  bool operator ==(other) =>
-      other is _IconResult && other.style == style && other.name == name;
-
-  @override
-  int get hashCode => Object.hashAll([style, name]);
-
-  Field toField() {
-    final unicode = iconsMap[name];
-    if (unicode == null) {
-      throw new Error(); // TODO better errors
-    }
-    return Field(
-      (b) => b
-        ..name = ReCase("fa-${name}").camelCase
-        ..modifier = FieldModifier.constant
-        ..type = refer("IconData")
-        ..static = true
-        ..assignment = refer('IconData').call(
-          [literalNum(int.parse(unicode, radix: 16))],
-          {'fontFamily': refer('_fontFamily')},
-        ).code,
-    );
-  }
-}
-
-class _Visitor extends RecursiveAstVisitor {
-  static final RegExp prefixPattern =
-      RegExp(r"^FA(Solid|Regular|Light|Thin|Brands|Duotone|SharpSolid|SharpRegular)$");
-  static final RegExp iconPattern = RegExp(r"^fa(.+)$");
-  final Set<_IconResult> access = {};
-
-  @override
-  visitPrefixedIdentifier(node) {
-    final prefixMatch = prefixPattern.firstMatch(node.prefix.name);
-    final iconMatch = iconPattern.firstMatch(node.identifier.name);
-    if (prefixMatch != null && iconMatch != null) {
-      access.add(_IconResult(
-        style: prefixMatch.group(1)!.toLowerCase(),
-        name: ReCase(iconMatch.group(1)!).paramCase,
-      ));
-    }
-    super.visitPrefixedIdentifier(node);
-  }
-}
-
+/// Generates one library of `IconData` constants per FontAwesome style,
+/// containing only the icons actually referenced in the package's `lib/`.
 class FontAwesomePro extends Builder {
   /// A static method to initialize the builder.
   static FontAwesomePro builder(BuilderOptions options) => FontAwesomePro();
 
   static final _allDartFiles = Glob('lib/**.dart');
 
+  static final _buildExtensions = {
+    r'lib/$lib$': [
+      for (final style in FontAwesomeStyle.values) style.outputPath
+    ],
+  };
+
   @override
   Future<void> build(BuildStep buildStep) async {
-    final Set<_IconResult> icons = {};
+    final sources = <String>[];
     await for (final input in buildStep.findAssets(_allDartFiles)) {
-      final node = await buildStep.resolver.compilationUnitFor(input);
-      final visitor = _Visitor();
-      node.accept(visitor);
-      icons.addAll(visitor.access);
+      // Skip our own output, so a build is idempotent.
+      if (input.path.startsWith('${FontAwesomeStyle.outputDirectory}/'))
+        continue;
+      sources.add(await buildStep.readAsString(input));
     }
-    for (final style in styles) {
-      final formatter =
-          DartFormatter(languageVersion: DartFormatter.latestShortStyleLanguageVersion);
-      final emitter = DartEmitter(useNullSafetySyntax: true);
-      final library = printLibrary(
-        style,
-        icons.where((element) => element.style == style),
-      );
-      final contents = formatter.format("${library.accept(emitter)}");
-      final filePath = style.contains('-') 
-          ? p.join('lib', 'font_awesome', '${style.replaceAll('-', '_')}.dart')
-          : p.join('lib', 'font_awesome', '${style}.dart');
-      
-      buildStep.writeAsString(
-        AssetId(
-          buildStep.inputId.package,
-          filePath,
+
+    final result = generate(sources);
+    for (final unknown in result.unknownIcons) {
+      log.warning('Unknown FontAwesome icon: $unknown');
+    }
+
+    await Future.wait([
+      for (final entry in result.libraries.entries)
+        buildStep.writeAsString(
+          AssetId(buildStep.inputId.package, entry.key),
+          entry.value,
         ),
-        contents,
-      );
-    }
+    ]);
   }
 
   @override
-  Map<String, List<String>> get buildExtensions => const {
-        r'lib/$lib$': [
-          r'lib/font_awesome/solid.dart',
-          r'lib/font_awesome/regular.dart',
-          r'lib/font_awesome/light.dart',
-          r'lib/font_awesome/thin.dart',
-          r'lib/font_awesome/brands.dart',
-          r'lib/font_awesome/duotone.dart',
-          r'lib/font_awesome/sharp_solid.dart',
-          r'lib/font_awesome/sharp_regular.dart',
-        ],
-      };
+  Map<String, List<String>> get buildExtensions => _buildExtensions;
 }

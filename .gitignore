@@ -20,3 +20,7 @@ doc/api/
 *.js.deps
 *.js.map
 /icons.json
+
+# Editor and local history directories
+.idea/
+.history/
